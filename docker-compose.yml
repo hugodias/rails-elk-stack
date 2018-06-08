@@ -1,0 +1,69 @@
+version: '3'
+services:
+  db:
+    image: postgres
+    volumes:
+      - ./tmp/db:/var/lib/postgresql/data
+  web:
+    build: .
+    command: bundle exec rails s -p 3000 -b '0.0.0.0'
+    volumes:
+      - .:/myapp
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+    # Very important!!!
+    logging:
+      driver: "gelf"
+      options:
+        gelf-address: 'udp://localhost:12201'
+
+  elasticsearch:
+    build:
+      context: elasticsearch/
+    volumes:
+      - ./elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      ES_JAVA_OPTS: "-Xmx256m -Xms256m"
+    networks:
+      - elk
+
+  logstash:
+    build:
+      context: logstash/
+    volumes:
+      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
+    ports:
+      - "12201:12201/udp"
+    environment:
+      LS_JAVA_OPTS: "-Xmx256m -Xms256m"
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+
+  kibana:
+    build:
+      context: kibana/
+    volumes:
+      - ./kibana/config/:/usr/share/kibana/config:ro
+    ports:
+      - "5601:5601"
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+
+volumes:
+  database:
+  legacy_database:
+
+networks:
+
+  elk:
+    driver: bridge
